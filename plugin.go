@@ -86,7 +86,7 @@ func (p *Plugin) Exec() error {
 					}
 					return fmt.Errorf("Error: unable to get latest build for %s.\n", entry)
 				}
-				if (build.Status != drone.StatusRunning && build.Status != drone.StatusPending) || p.Wait == false {
+				if (build.Status != drone.StatusRunning && build.Status != drone.StatusPending) || !p.Wait {
 					if p.Fork {
 						// start a new  build
 						_, err = client.BuildFork(owner, name, build.Number, params)
@@ -113,7 +113,7 @@ func (p *Plugin) Exec() error {
 
 						break I
 					}
-				} else if p.Wait == true {
+				} else if p.Wait {
 					fmt.Printf("BuildLast for repository: %s, returned build number: %v with a status of %s. Will retry for %v.\n", entry, build.Number, build.Status, p.Timeout)
 					waiting = true
 				}
