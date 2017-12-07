@@ -50,6 +50,23 @@ func main() {
 			Usage:  "How long to wait on any currently running builds",
 			EnvVar: "PLUGIN_WAIT_TIMEOUT",
 		},
+		cli.BoolFlag{
+			Name:   "track",
+			Usage:  "Track triggered build status, error on non-success",
+			EnvVar: "PLUGIN_TRACK",
+		},
+		cli.DurationFlag{
+			Name:   "track-interval",
+			Value:  time.Duration(60) * time.Second,
+			Usage:  "How often to poll build status while tracking builds",
+			EnvVar: "PLUGIN_TRACK_INTERVAL",
+		},
+		cli.DurationFlag{
+			Name:   "track-timeout",
+			Value:  time.Duration(600) * time.Second,
+			Usage:  "How long to wait while tracking builds",
+			EnvVar: "PLUGIN_TRACK_TIMEOUT",
+		},
 		cli.StringSliceFlag{
 			Name:   "params",
 			Usage:  "List of params (key=value or file paths of params) to pass to triggered builds",
@@ -77,14 +94,17 @@ func run(c *cli.Context) error {
 	}
 
 	plugin := Plugin{
-		Repos:     c.StringSlice("repositories"),
-		Server:    c.String("server"),
-		Token:     c.String("token"),
-		Fork:      c.Bool("fork"),
-		Wait:      c.Bool("wait"),
-		Timeout:   c.Duration("timeout"),
-		Params:    c.StringSlice("params"),
-		ParamsEnv: c.StringSlice("params-from-env"),
+		Repos:         c.StringSlice("repositories"),
+		Server:        c.String("server"),
+		Token:         c.String("token"),
+		Fork:          c.Bool("fork"),
+		Wait:          c.Bool("wait"),
+		Timeout:       c.Duration("timeout"),
+		Params:        c.StringSlice("params"),
+		ParamsEnv:     c.StringSlice("params-from-env"),
+		Track:         c.Bool("track"),
+		TrackInterval: c.Duration("track-interval"),
+		TrackTimeout:  c.Duration("track-timeout"),
 	}
 
 	return plugin.Exec()

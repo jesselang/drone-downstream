@@ -13,14 +13,23 @@ import (
 
 // Plugin defines the Downstream plugin parameters.
 type Plugin struct {
-	Repos     []string
-	Server    string
-	Token     string
-	Fork      bool
-	Wait      bool
-	Timeout   time.Duration
-	Params    []string
-	ParamsEnv []string
+	Repos         []string
+	Server        string
+	Token         string
+	Fork          bool
+	Wait          bool
+	Timeout       time.Duration
+	Params        []string
+	ParamsEnv     []string
+	Track         bool
+	TrackInterval time.Duration
+	TrackTimeout  time.Duration
+}
+
+type trackedBuild struct {
+	owner  string
+	name   string
+	number int
 }
 
 // Exec runs the plugin
@@ -56,6 +65,8 @@ func (p *Plugin) Exec() error {
 	)
 	client := drone.NewClient(p.Server, auth)
 
+	var buildList []trackedBuild
+
 	for _, entry := range p.Repos {
 
 		// parses the repository name in owner/name@branch format
@@ -88,29 +99,30 @@ func (p *Plugin) Exec() error {
 				}
 				if (build.Status != drone.StatusRunning && build.Status != drone.StatusPending) || !p.Wait {
 					if p.Fork {
-						// start a new  build
-						_, err = client.BuildFork(owner, name, build.Number, params)
+						// start a new build
+						b, err := client.BuildFork(owner, name, build.Number, params)
 						if err != nil {
 							if waiting {
 								continue
 							}
 							return fmt.Errorf("Error: unable to trigger a new build for %s.\n", entry)
 						}
-						fmt.Printf("Starting new build %d for %s.\n", build.Number, entry)
+						buildList = append(buildList, trackedBuild{owner, name, b.Number})
+						fmt.Printf("Starting new build %d for %s\n", build.Number, entry)
 						logParams(params, p.ParamsEnv)
 						break I
 					} else {
 						// rebuild the latest build
-						_, err = client.BuildStart(owner, name, build.Number, params)
+						b, err := client.BuildStart(owner, name, build.Number, params)
 						if err != nil {
 							if waiting {
 								continue
 							}
 							return fmt.Errorf("Error: unable to trigger build for %s.\n", entry)
 						}
+						buildList = append(buildList, trackedBuild{owner, name, b.Number})
 						fmt.Printf("Restarting build %d for %s\n", build.Number, entry)
 						logParams(params, p.ParamsEnv)
-
 						break I
 					}
 				} else if p.Wait {
@@ -120,6 +132,67 @@ func (p *Plugin) Exec() error {
 			}
 		}
 	}
+
+	if p.Track {
+		timeout := time.After(p.TrackTimeout)
+		tick := time.Tick(p.TrackInterval)
+
+	J:
+		for {
+			select {
+			// Got a timeout! fail with a timeout error
+			case <-timeout:
+				return fmt.Errorf("Error: timed out waiting builds to finish.\n")
+			// Got a tick, we should check on the build status
+			case <-tick:
+				var pruneList []int
+				for i, entry := range buildList {
+					build, err := client.Build(entry.owner, entry.name, entry.number)
+					if err != nil {
+						fmt.Fprintf(
+							os.Stderr,
+							"Warning: failed to get build status for %s/%s#%d.\n",
+							entry.owner,
+							entry.name,
+							entry.number,
+						)
+					}
+
+					switch build.Status {
+					case drone.StatusSuccess:
+						fmt.Printf(
+							"%s/%s#%d completed\n",
+							entry.owner,
+							entry.name,
+							entry.number,
+						)
+						pruneList = append([]int{i}, pruneList...)
+					case drone.StatusFailure, drone.StatusKilled, drone.StatusError:
+						return fmt.Errorf(
+							"Error: build %s/%s#%d returned status %s.\n",
+							entry.owner,
+							entry.name,
+							entry.number,
+							build.Status,
+						)
+					}
+				}
+				for _, i := range pruneList {
+					if len(buildList) > i {
+						buildList = append(buildList[:i], buildList[i+1:]...)
+					} else {
+						buildList = buildList[:i]
+					}
+				}
+
+				if len(buildList) == 0 {
+					break J
+				}
+			}
+		}
+
+	}
+
 	return nil
 }
 
@@ -186,5 +259,6 @@ func logParams(params map[string]string, paramsEnv []string) {
 			}
 			fmt.Printf("  - %s: %s\n", k, v)
 		}
+		os.Stdout.Sync()
 	}
 }
