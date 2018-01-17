@@ -51,6 +51,11 @@ func main() {
 			EnvVar: "PLUGIN_WAIT_TIMEOUT",
 		},
 		cli.BoolFlag{
+			Name:   "last-successful",
+			Usage:  "Trigger last successful build",
+			EnvVar: "PLUGIN_LAST_SUCCESSFUL",
+		},
+		cli.BoolFlag{
 			Name:   "track",
 			Usage:  "Track triggered build status, error on non-success",
 			EnvVar: "PLUGIN_TRACK",
@@ -94,17 +99,18 @@ func run(c *cli.Context) error {
 	}
 
 	plugin := Plugin{
-		Repos:         c.StringSlice("repositories"),
-		Server:        c.String("server"),
-		Token:         c.String("token"),
-		Fork:          c.Bool("fork"),
-		Wait:          c.Bool("wait"),
-		Timeout:       c.Duration("timeout"),
-		Params:        c.StringSlice("params"),
-		ParamsEnv:     c.StringSlice("params-from-env"),
-		Track:         c.Bool("track"),
-		TrackInterval: c.Duration("track-interval"),
-		TrackTimeout:  c.Duration("track-timeout"),
+		Repos:          c.StringSlice("repositories"),
+		Server:         c.String("server"),
+		Token:          c.String("token"),
+		Fork:           c.Bool("fork"),
+		Wait:           c.Bool("wait"),
+		Timeout:        c.Duration("timeout"),
+		LastSuccessful: c.Bool("last-successful"),
+		Params:         c.StringSlice("params"),
+		ParamsEnv:      c.StringSlice("params-from-env"),
+		Track:          c.Bool("track"),
+		TrackInterval:  c.Duration("track-interval"),
+		TrackTimeout:   c.Duration("track-timeout"),
 	}
 
 	return plugin.Exec()
